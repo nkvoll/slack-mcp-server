@@ -39,7 +39,7 @@ func NewMCPServer(provider *provider.ApiProvider, transport string) *MCPServer {
 		),
 		mcp.WithString("limit",
 			mcp.DefaultString("1d"),
-			mcp.Description("Limit of messages to fetch in format of maximum ranges of time (e.g. 1d - 1 day, 30d - 30 days, 90d - 90 days which is a default limit for free tier history) or number of messages (e.g. 50). Must be empty when 'cursor' is provided."),
+			mcp.Description("Limit of messages to fetch in format of maximum ranges of time (e.g. 1d - 1 day, 30d - 30 days, 90d - 90 days which is a default limit for free tier history) (must end with 'd') or number of messages (e.g. 50). Must be empty when 'cursor' is provided."),
 		),
 	), conversationsHandler.ConversationsHistoryHandler)
 
@@ -124,6 +124,10 @@ func NewMCPServer(provider *provider.ApiProvider, transport string) *MCPServer {
 			mcp.DefaultNumber(20),
 			mcp.Description("The maximum number of items to return. Must be an integer between 1 and 100."),
 		),
+		mcp.WithString("sort",
+			mcp.DefaultString("score"),
+			mcp.Description("Type of sorting. Allowed values: 'score', 'date'. Default is 'score'. Using 'date' allows getting messages in the order they were sent."),
+		),
 	), conversationsHandler.ConversationsSearchHandler)
 
 	channelsHandler := handler.NewChannelsHandler(provider)
@@ -145,6 +149,14 @@ func NewMCPServer(provider *provider.ApiProvider, transport string) *MCPServer {
 			mcp.Description("Cursor for pagination. Use the value of the last row and column in the response as next_cursor field returned from the previous request."),
 		),
 	), channelsHandler.ChannelsHandler)
+
+	s.AddTool(mcp.NewTool("channels_id_lookup",
+		mcp.WithDescription("Get channel ID by name"),
+		mcp.WithString("channel_name",
+			mcp.Required(),
+			mcp.Description("Name of the channel. Example: '#general'"),
+		),
+	), channelsHandler.ChannelsIdLookupHandler)
 
 	return &MCPServer{
 		server: s,

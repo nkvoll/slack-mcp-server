@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"sort"
 	"strings"
 
@@ -104,6 +105,22 @@ func (ch *ChannelsHandler) ChannelsHandler(ctx context.Context, request mcp.Call
 	}
 
 	return mcp.NewToolResultText(string(csvBytes)), nil
+}
+
+func (ch *ChannelsHandler) ChannelsIdLookupHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	channelName := request.GetString("channel_name", "")
+
+	id, ok := ch.apiProvider.ProvideChannelsMaps().ChannelsInv[channelName]
+	if !ok {
+
+		_, ok := ch.apiProvider.ProvideChannelsMaps().Channels[channelName]
+		if ok {
+			return mcp.NewToolResultText(channelName), nil
+		}
+		return nil, errors.New("channel not found")
+	}
+
+	return mcp.NewToolResultText(id), nil
 }
 
 func filterChannelsByTypes(channels map[string]provider.Channel, types []string) []provider.Channel {

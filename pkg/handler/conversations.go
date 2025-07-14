@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -21,14 +22,15 @@ import (
 )
 
 type Message struct {
-	UserID   string `json:"userID"`
-	UserName string `json:"userUser"`
-	RealName string `json:"realName"`
-	Channel  string `json:"channelID"`
-	ThreadTs string `json:"ThreadTs"`
-	Text     string `json:"text"`
-	Time     string `json:"time"`
-	Cursor   string `json:"cursor"`
+	UserID    string `json:"userID"`
+	UserName  string `json:"userUser"`
+	RealName  string `json:"realName"`
+	Channel   string `json:"channelID"`
+	ThreadTs  string `json:"ThreadTs"`
+	Text      string `json:"text"`
+	Time      string `json:"time"`
+	Permalink string `json:"permalink"`
+	Cursor    string `json:"cursor"`
 }
 
 type conversationParams struct {
@@ -55,6 +57,7 @@ type searchParams struct {
 	query string // query:search query
 	limit int    // limit:100
 	page  int    // page:1
+	sort  string // sort:score
 }
 
 type addMessageParams struct {
@@ -145,13 +148,15 @@ func (ch *ConversationsHandler) ConversationsHistoryHandler(ctx context.Context,
 	}
 
 	historyParams := slack.GetConversationHistoryParameters{
-		ChannelID: params.channel,
-		Limit:     params.limit,
-		Oldest:    params.oldest,
-		Latest:    params.latest,
-		Cursor:    params.cursor,
-		Inclusive: false,
+		ChannelID:          params.channel,
+		Limit:              params.limit,
+		Oldest:             params.oldest,
+		Latest:             params.latest,
+		Cursor:             params.cursor,
+		Inclusive:          false,
+		IncludeAllMetadata: true,
 	}
+	fmt.Println(historyParams)
 
 	history, err := api.GetConversationHistoryContext(ctx, &historyParams)
 	if err != nil {
@@ -219,7 +224,7 @@ func (ch *ConversationsHandler) ConversationsSearchHandler(ctx context.Context, 
 	}
 
 	searchParams := slack.SearchParameters{
-		Sort:          slack.DEFAULT_SEARCH_SORT,
+		Sort:          "date",
 		SortDirection: slack.DEFAULT_SEARCH_SORT_DIR,
 		Highlight:     false,
 		Count:         params.limit,
@@ -279,13 +284,14 @@ func (ch *ConversationsHandler) convertMessagesFromHistory(slackMessages []slack
 		userName, realName := getUserInfo(msg.User, usersMap.Users)
 
 		messages = append(messages, Message{
-			UserID:   msg.User,
-			UserName: userName,
-			RealName: realName,
-			Text:     text.ProcessText(msg.Text),
-			Channel:  channel,
-			ThreadTs: msg.ThreadTimestamp,
-			Time:     msg.Timestamp,
+			UserID:    msg.User,
+			UserName:  userName,
+			RealName:  realName,
+			Text:      text.ProcessText(msg.Text),
+			Channel:   channel,
+			ThreadTs:  msg.ThreadTimestamp,
+			Time:      msg.Timestamp,
+			Permalink: msg.Permalink,
 		})
 	}
 
@@ -301,13 +307,14 @@ func (ch *ConversationsHandler) convertMessagesFromSearch(slackMessages []slack.
 		threadTs, _ := extractThreadTS(msg.Permalink)
 
 		messages = append(messages, Message{
-			UserID:   msg.User,
-			UserName: userName,
-			RealName: realName,
-			Text:     text.ProcessText(msg.Text),
-			Channel:  fmt.Sprintf("#%s", msg.Channel.Name),
-			ThreadTs: threadTs,
-			Time:     msg.Timestamp,
+			UserID:    msg.User,
+			UserName:  userName,
+			RealName:  realName,
+			Text:      text.ProcessText(msg.Text),
+			Channel:   fmt.Sprintf("#%s", msg.Channel.Name),
+			ThreadTs:  threadTs,
+			Time:      msg.Timestamp,
+			Permalink: msg.Permalink,
 		})
 	}
 
@@ -337,7 +344,7 @@ func (ch *ConversationsHandler) parseParamsToolConversations(request mcp.CallToo
 			return nil, err
 		}
 	} else if cursor == "" {
-		paramLimit, err = limitByNumeric(limit)
+		paramLimit, err = limitByNumeric(limit, 10)
 		if err != nil {
 			return nil, err
 		}
@@ -347,6 +354,8 @@ func (ch *ConversationsHandler) parseParamsToolConversations(request mcp.CallToo
 		channelsMaps := ch.apiProvider.ProvideChannelsMaps()
 		chn, ok := channelsMaps.ChannelsInv[channel]
 		if !ok {
+			log.Printf("available channels: %v", reflect.ValueOf(channelsMaps.Channels).MapKeys())
+			log.Printf("available channelsinv: %v", reflect.ValueOf(channelsMaps.ChannelsInv).MapKeys())
 			return nil, fmt.Errorf("channel %q not found", channel)
 		}
 
@@ -445,6 +454,11 @@ func (ch *ConversationsHandler) parseParamsToolSearch(req mcp.CallToolRequest) (
 		addFilter(filters, "with", f)
 	}
 
+	var sort = "score"
+	if sortParam := req.GetString("sort", ""); sortParam != "" {
+		sort = sortParam
+	}
+
 	// from:
 	if from := req.GetString("filter_users_from", ""); from != "" {
 		f, err := ch.paramFormatUser(from)
@@ -498,6 +512,7 @@ func (ch *ConversationsHandler) parseParamsToolSearch(req mcp.CallToolRequest) (
 		query: finalQuery,
 		limit: limit,
 		page:  page,
+		sort:  sort,
 	}, nil
 }
 
@@ -560,7 +575,10 @@ func getUserInfo(userID string, usersMap map[string]slack.User) (userName, realN
 	return userID, userID
 }
 
-func limitByNumeric(limit string) (int, error) {
+func limitByNumeric(limit string, defaultLimit int) (int, error) {
+	if limit == "" {
+		return defaultLimit, nil
+	}
 	n, err := strconv.Atoi(limit)
 	if err != nil {
 		return 0, fmt.Errorf("invalid numeric limit: %q", limit)

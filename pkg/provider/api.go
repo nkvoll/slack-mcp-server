@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -218,6 +219,7 @@ func (ap *ApiProvider) RefreshUsers(ctx context.Context) error {
 		} else {
 			for _, u := range cachedUsers {
 				ap.users[u.ID] = u
+				ap.usersInv[u.Name] = u.ID
 			}
 			log.Printf("Loaded %d users from cache %q", len(cachedUsers), ap.usersCache)
 			return nil
@@ -265,6 +267,7 @@ func (ap *ApiProvider) RefreshChannels(ctx context.Context) error {
 		} else {
 			for _, c := range cachedChannels {
 				ap.channels[c.ID] = c
+				ap.channelsInv[c.Name] = c.ID
 			}
 			log.Printf("Loaded %d channels from cache %q", len(cachedChannels), ap.channelsCache)
 			return nil
@@ -293,7 +296,7 @@ func (ap *ApiProvider) GetChannels(ctx context.Context, channelTypes []string) [
 
 	params := &slack.GetConversationsParameters{
 		Types:           AllChanTypes,
-		Limit:           999,
+		Limit:           500,
 		ExcludeArchived: true,
 	}
 
@@ -320,10 +323,12 @@ func (ap *ApiProvider) GetChannels(ctx context.Context, channelTypes []string) [
 		if ap.authResponse.EnterpriseID == "" {
 			chans1, nextcur, err = clientGeneric.GetConversationsContext(ctx, params)
 			if err != nil {
+				// XXX: This just seems broken. Why?
 				log.Printf("Failed to fetch channels: %v", err)
-				if strings.Contains(err.Error(), "slack rate limit exceeded") {
-					log.Printf("Rate limit exceeded (enterprise), waiting 30s...")
-					time.Sleep(30 * time.Second)
+				var rateErr *slack.RateLimitedError
+				if errors.As(err, &rateErr) {
+					log.Printf("Rate limit exceeded err (enterprise), waiting %s... %s, %v", rateErr.RetryAfter, nextcur, chans1)
+					time.Sleep(rateErr.RetryAfter)
 					log.Printf("Continuing...")
 					continue
 				}
