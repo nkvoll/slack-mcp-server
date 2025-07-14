@@ -20,6 +20,9 @@ func main() {
 	var transport string
 	flag.StringVar(&transport, "t", "stdio", "Transport type (stdio or sse)")
 	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio or sse)")
+
+	var waitForCaches bool
+	flag.BoolVar(&waitForCaches, "wait-for-caches", false, "Wait for caches to be loaded")
 	flag.Parse()
 
 	err := validateToolConfig(os.Getenv("SLACK_MCP_ADD_MESSAGE_TOOL"))
@@ -33,10 +36,16 @@ func main() {
 		transport,
 	)
 
-	go func() {
+	refreshCaches := func() {
 		newUsersWatcher(p)()
 		newChannelsWatcher(p)()
-	}()
+	}
+
+	if waitForCaches {
+		refreshCaches()
+	} else {
+		go refreshCaches()
+	}
 
 	switch transport {
 	case "stdio":
