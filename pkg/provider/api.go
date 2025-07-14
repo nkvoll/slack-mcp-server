@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/korotovsky/slack-mcp-server/pkg/limiter"
 	"github.com/korotovsky/slack-mcp-server/pkg/provider/edge"
@@ -320,6 +321,12 @@ func (ap *ApiProvider) GetChannels(ctx context.Context, channelTypes []string) [
 			chans1, nextcur, err = clientGeneric.GetConversationsContext(ctx, params)
 			if err != nil {
 				log.Printf("Failed to fetch channels: %v", err)
+				if strings.Contains(err.Error(), "slack rate limit exceeded") {
+					log.Printf("Rate limit exceeded (enterprise), waiting 30s...")
+					time.Sleep(30 * time.Second)
+					log.Printf("Continuing...")
+					continue
+				}
 				break
 			}
 			for _, channel := range chans1 {
@@ -346,6 +353,12 @@ func (ap *ApiProvider) GetChannels(ctx context.Context, channelTypes []string) [
 			chans2, _, err = clientE.GetConversationsContext(ctx, nil)
 			if err != nil {
 				log.Printf("Failed to fetch channels: %v", err)
+				if strings.Contains(err.Error(), "slack rate limit exceeded") {
+					log.Printf("Rate limit exceeded, waiting 30s...")
+					time.Sleep(30 * time.Second)
+					log.Printf("Continuing...")
+					continue
+				}
 				break
 			}
 			for _, channel := range chans2 {
