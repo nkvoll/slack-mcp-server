@@ -10,7 +10,7 @@ require (
 	github.com/rusq/slackauth v0.6.1
 	github.com/rusq/slackdump/v3 v3.1.6
 	github.com/rusq/tagops v0.1.1
-	github.com/slack-go/slack v0.17.1
+	github.com/slack-go/slack v0.17.3
 	github.com/takara2314/slack-go-util v0.2.0
 	golang.org/x/sync v0.14.0
 	golang.org/x/time v0.12.0
@@ -68,3 +68,6 @@ require (
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
 )
+
+
+replace github.com/slack-go/slack => github.com/nkvoll/slack v0.0.0-20250715103529-7ac25f4401e8

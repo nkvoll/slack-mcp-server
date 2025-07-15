@@ -21,8 +21,14 @@ func main() {
 	flag.StringVar(&transport, "t", "stdio", "Transport type (stdio or sse)")
 	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio or sse)")
 
-	var waitForCaches bool
-	flag.BoolVar(&waitForCaches, "wait-for-caches", false, "Wait for caches to be loaded")
+	var clientBoot bool
+	flag.BoolVar(&clientBoot, "client-boot", true, "Perform client boot")
+
+	var enableUsersCache bool
+	flag.BoolVar(&enableUsersCache, "enable-users-cache", true, "Enable users cache")
+
+	var enableChannelsCache bool
+	flag.BoolVar(&enableChannelsCache, "enable-channels-cache", true, "Enable channels cache")
 	flag.Parse()
 
 	err := validateToolConfig(os.Getenv("SLACK_MCP_ADD_MESSAGE_TOOL"))
@@ -36,15 +42,19 @@ func main() {
 		transport,
 	)
 
-	refreshCaches := func() {
+	if enableUsersCache {
 		newUsersWatcher(p)()
-		newChannelsWatcher(p)()
 	}
 
-	if waitForCaches {
-		refreshCaches()
-	} else {
-		go refreshCaches()
+	if clientBoot {
+		err := p.LoadFromClientBoot(context.Background())
+		if err != nil {
+			log.Fatalf("Client boot failed: %v", err)
+		}
+	}
+
+	if enableChannelsCache {
+		newChannelsWatcher(p)()
 	}
 
 	switch transport {

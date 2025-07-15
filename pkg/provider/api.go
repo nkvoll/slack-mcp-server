@@ -289,6 +289,73 @@ func (ap *ApiProvider) RefreshChannels(ctx context.Context) error {
 	return nil
 }
 
+type ClientBootChannel struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	//Topic       string `json:"topic"`
+	//Purpose     string `json:"purpose"`
+	MemberCount int  `json:"memberCount"`
+	IsMpIM      bool `json:"mpim"`
+	IsIM        bool `json:"im"`
+	IsPrivate   bool `json:"private"`
+}
+
+type ClientBoot struct {
+	Channels []ClientBootChannel `json:"channels"`
+	// XXX: responsemeta is part of SlackResponse, fix upstream?
+	//ResponseMetaData responseMetaData `json:"response_metadata"`
+	slack.SlackResponse
+}
+
+func (ap *ApiProvider) GetClientBoot(ctx context.Context) (*ClientBoot, error) {
+	clientGeneric, err := ap.ProvideGeneric()
+	if err != nil {
+		return nil, err
+	}
+
+	values := url.Values{
+		"token": {ap.authProvider.SlackToken()},
+	}
+
+	response := ClientBoot{}
+
+	if err := clientGeneric.UnsafePostMethod(ctx, "client.userBoot", values, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+func (ap *ApiProvider) LoadFromClientBoot(ctx context.Context) error {
+	clientBoot, err := ap.GetClientBoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, channel := range clientBoot.Channels {
+		ch := mapChannel(
+			channel.ID,
+			channel.Name,
+			channel.Name,
+			"",
+			"",
+			"",
+			[]string{},
+			-1,
+			channel.IsIM,
+			channel.IsMpIM,
+			channel.IsPrivate,
+			ap.ProvideUsersMap().Users,
+		)
+		ap.channels[ch.ID] = ch
+		ap.channelsInv[ch.Name] = ch.ID
+	}
+
+	log.Printf("Loaded %d channels from client boot", len(clientBoot.Channels))
+
+	return nil
+}
+
 func (ap *ApiProvider) GetChannels(ctx context.Context, channelTypes []string) []Channel {
 	if len(channelTypes) == 0 {
 		channelTypes = AllChanTypes
@@ -327,13 +394,14 @@ func (ap *ApiProvider) GetChannels(ctx context.Context, channelTypes []string) [
 				log.Printf("Failed to fetch channels: %v", err)
 				var rateErr *slack.RateLimitedError
 				if errors.As(err, &rateErr) {
-					log.Printf("Rate limit exceeded err (enterprise), waiting %s... %s, %v", rateErr.RetryAfter, nextcur, chans1)
+					log.Printf("Rate limit exceeded getting channels (have: %d) (generic), waiting with cursor %s... %s", len(chans), rateErr.RetryAfter, params.Cursor)
 					time.Sleep(rateErr.RetryAfter)
-					log.Printf("Continuing...")
+					log.Printf("Retrying fetching channels from cursor: %s...", params.Cursor)
 					continue
 				}
 				break
 			}
+			log.Printf("Got %d new channels for a total of %d", len(chans1), len(chans)+len(chans1))
 			for _, channel := range chans1 {
 				ch := mapChannel(
 					channel.ID,
