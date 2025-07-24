@@ -1,5 +1,30 @@
 # Slack MCP Server
 
+### Note about changes from upstream
+
+Note: The purpose of this repository from the authors POV was to experiment with combining an LLM with a read-only view of Slack from the same point of view as a human client **without administrative access to the Slack workspace**. This means bot authentication (e.g. `xoxb-` tokens) is out of the picture.
+
+A forked version of [github.com/slack-go/slack](https://github.com/slack-go/slack) is used to access the Slack API in order to send custom requests to non-public APIs to speed up development and channel cache updates. Some additional tweaks were made to the [Slack MCP Server used](https://github.com/korotovsky/slack-mcp-server) to expose
+this as a tool, and some fixes were made to the original codebase for the channel caching and channel lookup (which may be unnecessary given the channel caching fixes).
+
+**Warning**: The use of these non-public APIs may trigger Slack reacting to the authentication and API usage as a third-party client and reacting to it as suspicous activity. For the author, this has happened once over a couple of weeks and required signing in again. Use at your own risk.
+
+Small note about caches:
+
+- There's two main caches: the users cache and the channels cache.
+- The users cache is small and quick to populate. It allows lookup between the UXXXXXX and the @username formats, which is required for searches/lookups etc.
+- The channels cache is larger but very slow to populate on larger workspaces, as it requires paginating through all channels, and because the pagination size includes filtered out channels (e.g due to archivals etc), you may request 1000 channels per page only to end up with 2-6. This leads straight into rate limiting which makes the process very very slow. It's also required to look up channels between the CXxxxxxx and #channelname formats.
+
+To work with this there's three relevant flags:
+
+- `--enable-users-cache=true/false`: Defaults to true. Enables the users cache. Required for searches/lookups etc.
+- `--enable-channels-cache=true/false`: Defaults to true. Enables the channels cache. Required for channel lookups etc. If this takes too long for your workspace, disable it and enable the next one instead:
+- `--client-boot=true/false`: Defaults to false. Enables client boot. This reads the channel ids from the same bootstrap API as the Slack client, which enables the cache for the channels the current user is already in, and is a quick operation.
+
+Once the users/channels cache files exist, they will be used without consulting the Slack API. To refresh the caches, delete the files and restart the MCP server. If client boot is enabled, it will be used during /every/ start to refresh the cache, so no deletion is required. If you're running in Docker, you may want to consider volume mounts to cache the files between multiple restarts (or not).
+
+## Upstream readme continues here:
+
 Model Context Protocol (MCP) server for Slack Workspaces. The most powerful MCP Slack server — supports Stdio and SSE transports, proxy settings, DMs, Group DMs, Smart History fetch (by date or count), may work via OAuth or in complete stealth mode with no permissions and scopes in Workspace 😏.
 
 > [!IMPORTANT]  

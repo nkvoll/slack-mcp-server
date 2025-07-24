@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -245,6 +246,45 @@ func (ch *ConversationsHandler) ConversationsSearchHandler(ctx context.Context, 
 	}
 
 	return marshalMessagesToCSV(messages)
+}
+
+func (ch *ChannelsHandler) ConversationsInfoHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	channelName := request.GetString("channel", "")
+
+	id, ok := ch.apiProvider.ProvideChannelsMaps().ChannelsInv[channelName]
+	if !ok {
+		ch, ok := ch.apiProvider.ProvideChannelsMaps().Channels[channelName]
+		if !ok {
+			return nil, errors.New("channel not found")
+		}
+		id = ch.ID
+	}
+
+	includeNumMembers := request.GetBool("include_num_members", true)
+	includeLocale := request.GetBool("include_locale", true)
+
+	api, err := ch.apiProvider.ProvideGeneric()
+	if err != nil {
+		return nil, err
+	}
+
+	input := slack.GetConversationInfoInput{
+		ChannelID:         id,
+		IncludeLocale:     includeLocale,
+		IncludeNumMembers: includeNumMembers,
+	}
+
+	info, err := api.GetConversationInfoContext(ctx, &input)
+	if err != nil {
+		return nil, err
+	}
+
+	jsonBytes, err := json.Marshal(info)
+	if err != nil {
+		return nil, err
+	}
+
+	return mcp.NewToolResultText(string(jsonBytes)), nil
 }
 
 func isChannelAllowed(channel string) bool {

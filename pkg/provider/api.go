@@ -362,8 +362,8 @@ func (ap *ApiProvider) GetChannels(ctx context.Context, channelTypes []string) [
 	}
 
 	params := &slack.GetConversationsParameters{
-		Types:           AllChanTypes,
-		Limit:           500,
+		Types:           []string{"public_channel", "private_channel", "mpim"},
+		Limit:           9910009,
 		ExcludeArchived: true,
 	}
 

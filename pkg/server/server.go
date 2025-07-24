@@ -150,6 +150,20 @@ func NewMCPServer(provider *provider.ApiProvider, transport string) *MCPServer {
 		),
 	), channelsHandler.ChannelsHandler)
 
+	s.AddTool(mcp.NewTool("conversations_info",
+		mcp.WithDescription("Get conversation / channel info"),
+		mcp.WithString("channel",
+			mcp.Required(),
+			mcp.Description("Conversation ID to learn more about. Example: 'C1234567890'"),
+		),
+		mcp.WithBoolean("include_num_members",
+			mcp.Description("Set to true to include the member count for the specified conversation. Defaults to true."),
+		),
+		mcp.WithBoolean("include_locale",
+			mcp.Description("Set this to true to receive the locale for this conversation. Defaults to true"),
+		),
+	), channelsHandler.ConversationsInfoHandler)
+
 	s.AddTool(mcp.NewTool("channels_id_lookup",
 		mcp.WithDescription("Get channel ID by name"),
 		mcp.WithString("channel_name",

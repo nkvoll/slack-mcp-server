@@ -22,13 +22,13 @@ func main() {
 	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio or sse)")
 
 	var clientBoot bool
-	flag.BoolVar(&clientBoot, "client-boot", true, "Perform client boot")
+	flag.BoolVar(&clientBoot, "client-boot", false, "Perform client boot")
 
 	var enableUsersCache bool
 	flag.BoolVar(&enableUsersCache, "enable-users-cache", true, "Enable users cache")
 
 	var enableChannelsCache bool
-	flag.BoolVar(&enableChannelsCache, "enable-channels-cache", true, "Enable channels cache")
+	flag.BoolVar(&enableChannelsCache, "enable-channels-cache", false, "Enable channels cache")
 	flag.Parse()
 
 	err := validateToolConfig(os.Getenv("SLACK_MCP_ADD_MESSAGE_TOOL"))
