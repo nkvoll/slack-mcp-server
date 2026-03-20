@@ -69,6 +69,14 @@ func main() {
 	p := provider.New(transport, logger)
 	s := server.NewMCPServer(p, logger, enabledTools)
 
+	err = p.LoadFromClientBoot(context.Background())
+	if err != nil {
+		logger.Fatal("error in LoadFromClientBoot",
+			zap.String("context", "console"),
+			zap.Error(err),
+		)
+	}
+
 	go func() {
 		var once sync.Once
 

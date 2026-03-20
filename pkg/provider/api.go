@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -228,11 +229,11 @@ type MCPSlackClient struct {
 	authResponse *slack.AuthTestResponse
 	authProvider auth.Provider
 
-	isEnterprise  bool
-	isOAuth       bool
-	isBotToken    bool
-	edgeFailed    bool // set when edge API fails; subsequent calls skip straight to standard API
-	teamEndpoint  string
+	isEnterprise bool
+	isOAuth      bool
+	isBotToken   bool
+	edgeFailed   bool // set when edge API fails; subsequent calls skip straight to standard API
+	teamEndpoint string
 }
 
 type ApiProvider struct {
@@ -730,6 +731,66 @@ func newWithXOXC(transport string, authProvider auth.ValueAuth, logger *zap.Logg
 		ChannelsInv: make(map[string]string),
 	})
 	return ap
+}
+
+// LoadFromClientBoot calls client.userBoot and writes the channels list to the
+// on-disk channels cache when there is no usable cache file yet. That lets
+// RefreshChannels load from disk immediately instead of waiting on a full
+// conversations sync. DM display names use the users snapshot when available;
+// otherwise they fall back to user IDs until a later refresh remaps them.
+func (ap *ApiProvider) LoadFromClientBoot(ctx context.Context) error {
+	if ap.client == nil {
+		return nil
+	}
+
+	boot, err := ap.client.ClientUserBoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	usersMap := ap.ProvideUsersMap().Users
+	chans := make([]Channel, 0, len(boot.Channels))
+	for _, ub := range boot.Channels {
+		if ub.IsArchived {
+			continue
+		}
+		sc := ub.SlackChannel()
+		chans = append(chans, mapChannel(
+			sc.ID,
+			sc.Name,
+			sc.NameNormalized,
+			sc.Topic.Value,
+			sc.Purpose.Value,
+			sc.User,
+			sc.Members,
+			sc.NumMembers,
+			sc.IsIM,
+			sc.IsMpIM,
+			sc.IsPrivate,
+			sc.IsExtShared,
+			usersMap,
+		))
+	}
+
+	if len(chans) == 0 {
+		ap.logger.Info("client.userBoot returned no channels, skipping channels cache bootstrap",
+			zap.String("cache_file", ap.channelsCachePath))
+		return nil
+	}
+
+	data, err := json.MarshalIndent(chans, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal channels cache: %w", err)
+	}
+	if err := os.WriteFile(ap.channelsCachePath, data, 0644); err != nil {
+		return fmt.Errorf("write channels cache: %w", err)
+	}
+
+	ap.logger.Info("Bootstrapped channels cache from client.userBoot",
+		zap.Int("count", len(chans)),
+		zap.String("cache_file", ap.channelsCachePath))
+
+	return nil
 }
 
 func (ap *ApiProvider) RefreshUsers(ctx context.Context) error {
