@@ -87,8 +87,18 @@ func main() {
 	p := provider.New(transport, logger)
 	s := server.NewMCPServer(p, logger, enabledTools)
 
-	err = p.LoadFromClientBoot(context.Background())
-	if err != nil {
+	// this is a little bit ugly, but we want the users to be available when loading from clientBoot.
+	// loading users seems to be pretty quick, but channels are not, so the main benefit in clientboot
+	// is just to get the channels list anyway.
+	// in the future, we should probably be able to fetch enough users from the clientboot response?
+	if err := p.RefreshUsers(context.Background()); err != nil {
+		logger.Fatal("error in RefreshUsers",
+			zap.String("context", "console"),
+			zap.Error(err),
+		)
+	}
+
+	if err = p.LoadFromClientBoot(context.Background()); err != nil {
 		logger.Fatal("error in LoadFromClientBoot",
 			zap.String("context", "console"),
 			zap.Error(err),

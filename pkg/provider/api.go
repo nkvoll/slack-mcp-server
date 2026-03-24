@@ -788,6 +788,34 @@ func (ap *ApiProvider) LoadFromClientBoot(ctx context.Context) error {
 		return nil
 	}
 
+	newSnapshot := &ChannelsCache{
+		Channels:    make(map[string]Channel, len(chans)),
+		ChannelsInv: make(map[string]string, len(chans)),
+	}
+
+	for _, c := range chans {
+		// For IM channels, re-generate the name and purpose using current users cache
+		if c.IsIM {
+			// Re-map the channel to get updated user name if available
+			remappedChannel := mapChannel(
+				c.ID, "", "", c.Topic, c.Purpose,
+				c.User, c.Members, c.MemberCount,
+				c.IsIM, c.IsMpIM, c.IsPrivate, c.IsExtShared,
+				usersMap,
+			)
+			newSnapshot.Channels[c.ID] = remappedChannel
+			newSnapshot.ChannelsInv[remappedChannel.Name] = c.ID
+		} else {
+			newSnapshot.Channels[c.ID] = c
+			newSnapshot.ChannelsInv[c.Name] = c.ID
+		}
+	}
+	ap.channelsSnapshot.Store(newSnapshot)
+	ap.logger.Info("Loaded channels from clientBoot and re-mapped DM names",
+		zap.Int("count", len(chans)),
+		zap.String("cache_file", ap.channelsCachePath))
+	ap.channelsReady = true
+
 	data, err := json.MarshalIndent(chans, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal channels cache: %w", err)
